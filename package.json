@@ -11,6 +11,7 @@
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "nodemailer": "^6.9.4"
+    "nodemailer": "^6.9.4",
+    "yup": "^1.0.0"
   }
 }
