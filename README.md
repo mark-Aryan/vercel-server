@@ -1,28 +1,41 @@
 # Quotation Receiver API on Vercel (Gmail SMTP)
 
-This Next.js project exposes an API endpoint to receive quotation form submissions and forward them via Gmail SMTP to your designated email (e.g., email-to-SMS gateway for SMS delivery).
+A Next.js API to receive form data, validate it, and forward via Gmail SMTP (free SMS gateway support).
 
 ## Setup
-1. Clone this repository
-2. Run `npm install`
-3. Copy `.env.example` to `.env.local` and set:
-   - `GMAIL_USER`: Your Gmail address
-   - `GMAIL_PASS`: App-specific password (generate via Google Account > Security)
-   - `TO_SMS_EMAIL`: Destination email or SMS gateway address
 
-4. Deploy to Vercel or run locally with:
-
+1. **Clone** the repository:
+   ```bash
+   git clone https://github.com/mark-Aryan/vercel-server.git
+   ```
+2. **Install** dependencies:
+   ```bash
+   cd vercel-server
+   npm install
+   ```
+3. **Configure** environment:
+   - Copy `.env.example` to `.env.local`
+   - Fill in:
+     - `GMAIL_USER`: your Gmail address
+     - `GMAIL_PASS`: app-specific password (create after enabling 2FA)
+     - `TO_SMS_EMAIL`: e.g. `1234567890@txt.att.net`
+4. **Run locally**:
    ```bash
    npm run dev
    ```
+5. **Deploy on Vercel**:
+   - Connect your repo
+   - Add env vars in Vercel dashboard under Settings → Environment Variables
+   - Trigger a deploy
 
-## Endpoint
+## API
 
 ### POST `/api/submit-quotation`
-- **Body**: JSON `{ "name": string, "phone": string, "email": string }`
-- **Success**: HTTP 200 `{ message: 'Quotation sent successfully' }`
-- **Errors**: HTTP 400, 405, or 500
+
+- **Body**: `{ name, phone, email }`
+- **Success (200)**: `{ message: 'Quotation sent successfully' }`
+- **Validation Error (422)**: `{ errors: [{ field, message }] }`
+- **Method Not Allowed (405)**
+- **Server Error (500)**
 
 ---
-
-Leverages **nodemailer** with Gmail SMTP (no additional paid service required).
