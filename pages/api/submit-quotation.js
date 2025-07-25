@@ -1,8 +1,19 @@
-import sendgrid from '@sendgrid/mail';
-sendgrid.setApiKey(process.env.SENDGRID_API_KEY);
+import nodemailer from 'nodemailer';
+
+// create reusable transporter using Gmail SMTP
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_PASS,
+  },
+});
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
@@ -11,17 +22,20 @@ export default async function handler(req, res) {
     return res.status(400).json({ message: 'Missing required fields' });
   }
 
+  // construct message
+  const subject = 'Quotation Request';
   const text = `New Quotation Request:\nName: ${name}\nPhone: ${phone}\nEmail: ${email}`;
+
   try {
-    await sendgrid.send({
+    await transporter.sendMail({
+      from: process.env.GMAIL_USER,
       to: process.env.TO_SMS_EMAIL,
-      from: process.env.FROM_EMAIL,
-      subject: 'Quotation Request',
+      subject,
       text,
     });
     return res.status(200).json({ message: 'Quotation sent successfully' });
   } catch (error) {
-    console.error('SendGrid Error:', error);
+    console.error('SMTP Error:', error);
     return res.status(500).json({ message: 'Internal Server Error' });
   }
 }
