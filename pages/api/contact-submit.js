@@ -8,6 +8,11 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  if (!checkRateLimit(clientIp)) {
+    return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+  }
+
   const { fullName, email, phone, location, expertise, message } = req.body || {};
 
   if (!fullName || fullName.length < 2 ||
