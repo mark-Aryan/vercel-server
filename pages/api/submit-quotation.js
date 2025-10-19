@@ -1,85 +1,164 @@
-import nodemailer from 'nodemailer'
-import * as yup from 'yup'
+import nodemailer from 'nodemailer';
+import * as yup from 'yup';
 
-// Validation schema
+// HTML Entity Encoding
+function escapeHtml(text) {
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return String(text).replace(/[&<>"']/g, m => map[m]);
+}
+
+// Validation schema with anti-gibberish checks
 const schema = yup.object({
-  name:  yup.string().trim().min(3).max(50).required(),
-  phone: yup.string().matches(/^\d{10}$/).required(),
+  name: yup.string()
+    .trim()
+    .min(3, 'Name must be at least 3 characters')
+    .max(50, 'Name cannot exceed 50 characters')
+    .matches(/^[a-zA-Z\s'-]+$/, 'Name can only contain letters, spaces, hyphens, and apostrophes')
+    .test('no-numbers', 'Name cannot contain numbers', value => !/\d/.test(value))
+    .test('has-vowels', 'Please enter a valid name', value => {
+      if (!value) return false;
+      const words = value.trim().split(/\s+/);
+      return words.every(word => /[aeiouAEIOU]/.test(word));
+    })
+    .required('Name is required'),
+  
+  phone: yup.string()
+    .trim()
+    .matches(/^\d{10}$/, 'Phone must be exactly 10 digits')
+    .required('Phone is required'),
+  
   email: yup.string()
-            .email()
-            .matches(/^[^@]+@(?:gmail\.com|hotmail\.com|live\.com|outlook\.com)$/)
-            .required(),
-})
+    .trim()
+    .email('Invalid email format')
+    .matches(
+      /^[a-zA-Z0-9._-]+@(gmail\.com|hotmail\.com|live\.com|outlook\.com)$/i,
+      'Email must be from gmail.com, hotmail.com, live.com, or outlook.com'
+    )
+    .required('Email is required')
+});
 
 // Create Gmail SMTP transporter
 const transporter = nodemailer.createTransport({
-  host:   'smtp.gmail.com',
-  port:    465,
+  host: 'smtp.gmail.com',
+  port: 465,
   secure: true,
   auth: {
     user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_PASS,
-  },
-})
+    pass: process.env.GMAIL_PASS
+  }
+});
 
 export default async function handler(req, res) {
-  // 1) CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  // CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // 2) Handle preflight
+  // Handle preflight
   if (req.method === 'OPTIONS') {
-    return res.status(204).end()
+    return res.status(204).end();
   }
 
-  // 3) Only POST from here on
+  // Only POST allowed
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST')
-    return res.status(405).json({ error: 'Method Not Allowed' })
+    res.setHeader('Allow', 'POST');
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
   try {
-    // 4) Validate input
-    const { name, phone, email } = await schema.validate(req.body, { abortEarly: false })
+    // Validate input
+    const validatedData = await schema.validate(req.body, {
+      abortEarly: false,
+      stripUnknown: true
+    });
 
-    // 5) Build HTML + text
+    const { name, phone, email } = validatedData;
+
+    // Escape HTML
+    const safeName = escapeHtml(name);
+    const safeEmail = escapeHtml(email);
+    const safePhone = escapeHtml(phone);
+
+    // Build HTML email
     const html = `
-      <div style="font-family:Arial,sans-serif;color:#333;line-height:1.5;">
-        <h2 style="color:#2a6fad;border-bottom:2px solid #2a6fad;">📩 New Quotation Request</h2>
+      <div style="font-family:Arial,sans-serif;color:#333;line-height:1.5;max-width:600px;">
+        <h2 style="color:#2a6fad;border-bottom:2px solid #2a6fad;padding-bottom:10px;">📩 New Quotation Request</h2>
         <table style="width:100%;border-collapse:collapse;margin-top:1rem;">
-          <tr><th style="...">Name</th><td style="...">${name}</td></tr>
-          <tr><th style="...">Phone</th><td style="...">${phone}</td></tr>
-          <tr><th style="...">Email</th><td style="...">${email}</td></tr>
+          <tr>
+            <th style="text-align:left;padding:12px;background:#f0f0f0;border:1px solid #ddd;width:30%;">Name</th>
+            <td style="padding:12px;border:1px solid #ddd;">${safeName}</td>
+          </tr>
+          <tr>
+            <th style="text-align:left;padding:12px;background:#f0f0f0;border:1px solid #ddd;">Phone</th>
+            <td style="padding:12px;border:1px solid #ddd;">${safePhone}</td>
+          </tr>
+          <tr>
+            <th style="text-align:left;padding:12px;background:#f0f0f0;border:1px solid #ddd;">Email</th>
+            <td style="padding:12px;border:1px solid #ddd;">${safeEmail}</td>
+          </tr>
         </table>
-        <p style="margin-top:1.5rem;">Thank you for choosing our services. We will reach out shortly.</p>
-      </div>
-    `
-    const text =
-      `📩 New Quotation Request\n` +
-      `Name: ${name}\n` +
-      `Phone: ${phone}\n` +
-      `Email: ${email}\n` +
-      `Thank you for choosing our services.`
+        <p style="margin-top:1.5rem;color:#555;">
+          Thank you for choosing our services. We will reach out shortly with your quotation.
+        </p>
+        <p style="margin-top:1rem;font-size:0.9em;color:#666;">
+          Submitted: ${new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })} IST
+        </p>
+      </div>`;
 
-    // 6) Send via Gmail SMTP
+    // Plain text version
+    const text = `
+📩 New Quotation Request
+
+Name: ${name}
+Phone: ${phone}
+Email: ${email}
+
+Thank you for choosing our services. We will reach out shortly with your quotation.
+
+Submitted: ${new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })} IST
+    `.trim();
+
+    // Send via Gmail SMTP
     await transporter.sendMail({
-      from:    process.env.GMAIL_USER,
-      to:      process.env.TO_SMS_EMAIL,
-      subject: 'Quotation Request',
+      from: process.env.GMAIL_USER,
+      to: process.env.TO_SMS_EMAIL,
+      subject: `Quotation Request: ${name}`,
       text,
-      html,
-    })
+      html
+    });
 
-    return res.status(200).json({ message: 'Quotation sent successfully' })
-  }
-  catch (err) {
-    // 422 = validation errors
+    return res.status(200).json({
+      success: true,
+      message: 'Quotation sent successfully'
+    });
+
+  } catch (err) {
+    // Handle validation errors
     if (err.name === 'ValidationError') {
-      const errors = err.inner.map(e => ({ field: e.path, message: e.message }))
-      return res.status(422).json({ errors })
+      const errors = err.inner.map(e => ({
+        field: e.path,
+        message: e.message
+      }));
+      
+      console.error('[Validation Error]', errors);
+      
+      return res.status(422).json({
+        error: 'Validation failed',
+        errors: errors
+      });
     }
-    console.error('Internal Error:', err)
-    return res.status(500).json({ error: 'Internal Server Error' })
+
+    // Handle other errors
+    console.error('[Quotation Error]', err);
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to process quotation request'
+    });
   }
 }
