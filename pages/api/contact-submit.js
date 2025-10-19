@@ -1,7 +1,6 @@
 import nodemailer from 'nodemailer';
-import * as yup from 'yup';
 
-// HTML Entity Encoding to prevent XSS and display issues
+// HTML Entity Encoding to prevent XSS
 function escapeHtml(text) {
   const map = {
     '&': '&amp;',
@@ -13,64 +12,87 @@ function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, m => map[m]);
 }
 
-// Validation schema with strict patterns
-const contactSchema = yup.object({
-  fullName: yup.string()
-    .trim()
-    .min(2, 'Name must be at least 2 characters')
-    .max(50, 'Name cannot exceed 50 characters')
-    .matches(/^[a-zA-Z\s'-]+$/, 'Name can only contain letters, spaces, hyphens, and apostrophes')
-    .test('no-numbers', 'Name cannot contain numbers', value => !/\d/.test(value))
-    .test('real-name', 'Please enter a valid name', value => {
-      // Check for common gibberish patterns
-      if (!value) return false;
-      const words = value.trim().split(/\s+/);
-      // Each word should have at least one vowel
-      return words.every(word => /[aeiouAEIOU]/.test(word));
-    })
-    .required('Full name is required'),
+// Validation function (no external dependencies)
+function validateContactForm(data) {
+  const errors = [];
   
-  email: yup.string()
-    .trim()
-    .email('Invalid email format')
-    .matches(
-      /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
-      'Invalid email format'
-    )
-    .required('Email is required'),
+  // Full Name validation
+  if (!data.fullName || typeof data.fullName !== 'string') {
+    errors.push({ field: 'fullName', message: 'Full name is required' });
+  } else {
+    const name = data.fullName.trim();
+    if (name.length < 2) {
+      errors.push({ field: 'fullName', message: 'Name must be at least 2 characters' });
+    } else if (name.length > 50) {
+      errors.push({ field: 'fullName', message: 'Name cannot exceed 50 characters' });
+    } else if (!/^[a-zA-Z\s'-]+$/.test(name)) {
+      errors.push({ field: 'fullName', message: 'Name can only contain letters, spaces, hyphens, and apostrophes' });
+    } else if (!/[aeiouAEIOU]/.test(name)) {
+      errors.push({ field: 'fullName', message: 'Please enter a valid name' });
+    } else if (/\d/.test(name)) {
+      errors.push({ field: 'fullName', message: 'Name cannot contain numbers' });
+    }
+  }
   
-  phone: yup.string()
-    .trim()
-    .matches(/^\d{10}$/, 'Phone must be exactly 10 digits')
-    .required('Phone is required'),
+  // Email validation
+  if (!data.email || typeof data.email !== 'string') {
+    errors.push({ field: 'email', message: 'Email is required' });
+  } else {
+    const email = data.email.trim();
+    const emailPattern = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailPattern.test(email)) {
+      errors.push({ field: 'email', message: 'Please enter a valid email address' });
+    }
+  }
   
-  location: yup.string()
-    .trim()
-    .min(2, 'Location must be at least 2 characters')
-    .max(100, 'Location cannot exceed 100 characters')
-    .matches(/^[a-zA-Z0-9\s,.-]+$/, 'Location contains invalid characters')
-    .test('real-location', 'Please enter a valid location', value => {
-      // Check for vowels to avoid gibberish
-      return value && /[aeiouAEIOU]/.test(value);
-    })
-    .required('Location is required'),
+  // Phone validation
+  if (!data.phone || typeof data.phone !== 'string') {
+    errors.push({ field: 'phone', message: 'Phone is required' });
+  } else {
+    const phone = data.phone.trim();
+    if (!/^\d{10}$/.test(phone)) {
+      errors.push({ field: 'phone', message: 'Phone must be exactly 10 digits' });
+    }
+  }
   
-  expertise: yup.string()
-    .oneOf(
-      ['engineering', 'construction', 'architecture', 'design', 'other'],
-      'Invalid expertise selection'
-    )
-    .required('Expertise is required'),
+  // Location validation
+  if (!data.location || typeof data.location !== 'string') {
+    errors.push({ field: 'location', message: 'Location is required' });
+  } else {
+    const location = data.location.trim();
+    if (location.length < 2) {
+      errors.push({ field: 'location', message: 'Location must be at least 2 characters' });
+    } else if (location.length > 100) {
+      errors.push({ field: 'location', message: 'Location cannot exceed 100 characters' });
+    } else if (!/^[a-zA-Z0-9\s,.-]+$/.test(location)) {
+      errors.push({ field: 'location', message: 'Location contains invalid characters' });
+    } else if (!/[aeiouAEIOU]/.test(location)) {
+      errors.push({ field: 'location', message: 'Please enter a valid location' });
+    }
+  }
   
-  message: yup.string()
-    .trim()
-    .min(10, 'Message must be at least 10 characters')
-    .max(500, 'Message cannot exceed 500 characters')
-    .test('has-vowels', 'Please enter a meaningful message', value => {
-      return value && /[aeiouAEIOU]/.test(value);
-    })
-    .required('Message is required')
-});
+  // Expertise validation
+  const validExpertise = ['engineering', 'construction', 'architecture', 'design', 'other'];
+  if (!data.expertise || !validExpertise.includes(data.expertise)) {
+    errors.push({ field: 'expertise', message: 'Please select a valid expertise' });
+  }
+  
+  // Message validation
+  if (!data.message || typeof data.message !== 'string') {
+    errors.push({ field: 'message', message: 'Message is required' });
+  } else {
+    const message = data.message.trim();
+    if (message.length < 10) {
+      errors.push({ field: 'message', message: 'Message must be at least 10 characters' });
+    } else if (message.length > 500) {
+      errors.push({ field: 'message', message: 'Message cannot exceed 500 characters' });
+    } else if (!/[aeiouAEIOU]/.test(message)) {
+      errors.push({ field: 'message', message: 'Please enter a meaningful message' });
+    }
+  }
+  
+  return errors;
+}
 
 // Create Gmail SMTP transporter
 const transporter = nodemailer.createTransport({
@@ -101,15 +123,38 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Validate input with yup
-    const validatedData = await contactSchema.validate(req.body, {
-      abortEarly: false,
-      stripUnknown: true
-    });
+    // Log request body for debugging
+    console.log('[Contact Form] Received data:', JSON.stringify(req.body, null, 2));
 
-    const { fullName, email, phone, location, expertise, message } = validatedData;
+    // Check environment variables
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS || !process.env.TO_SMS_EMAIL) {
+      console.error('[Contact Form] Missing environment variables');
+      return res.status(500).json({ 
+        error: 'Server configuration error',
+        message: 'Email service not properly configured'
+      });
+    }
 
-    // Escape HTML to prevent XSS and display issues
+    // Validate input
+    const validationErrors = validateContactForm(req.body);
+    
+    if (validationErrors.length > 0) {
+      console.log('[Contact Form] Validation errors:', validationErrors);
+      return res.status(422).json({
+        error: 'Validation failed',
+        errors: validationErrors
+      });
+    }
+
+    // Extract and sanitize data
+    const fullName = req.body.fullName.trim();
+    const email = req.body.email.trim();
+    const phone = req.body.phone.trim();
+    const location = req.body.location.trim();
+    const expertise = req.body.expertise;
+    const message = req.body.message.trim();
+
+    // Escape HTML
     const safeName = escapeHtml(fullName);
     const safeEmail = escapeHtml(email);
     const safePhone = escapeHtml(phone);
@@ -166,8 +211,10 @@ ${message}
 Submitted: ${new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })} IST
     `.trim();
 
+    console.log('[Contact Form] Attempting to send email to:', process.env.TO_SMS_EMAIL);
+
     // Send email
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: process.env.GMAIL_USER,
       to: process.env.TO_SMS_EMAIL,
       subject: `New Contact: ${fullName} - ${expertise}`,
@@ -175,32 +222,39 @@ Submitted: ${new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })} I
       html
     });
 
+    console.log('[Contact Form] Email sent successfully:', info.messageId);
+
     return res.status(200).json({
       success: true,
       message: 'Contact form sent successfully'
     });
 
   } catch (err) {
-    // Handle validation errors
-    if (err.name === 'ValidationError') {
-      const errors = err.inner.map(e => ({
-        field: e.path,
-        message: e.message
-      }));
-      
-      console.error('[Validation Error]', errors);
-      
-      return res.status(422).json({
-        error: 'Validation failed',
-        errors: errors
+    // Detailed error logging
+    console.error('[Contact Form] Error occurred:');
+    console.error('Error name:', err.name);
+    console.error('Error message:', err.message);
+    console.error('Error stack:', err.stack);
+    
+    // Check for specific SMTP errors
+    if (err.code === 'EAUTH') {
+      return res.status(500).json({
+        error: 'Email authentication failed',
+        message: 'Please check GMAIL_USER and GMAIL_PASS environment variables'
+      });
+    }
+    
+    if (err.code === 'ECONNECTION') {
+      return res.status(500).json({
+        error: 'Email connection failed',
+        message: 'Could not connect to email server'
       });
     }
 
-    // Handle other errors
-    console.error('[Contact Error]', err);
     return res.status(500).json({
       error: 'Internal Server Error',
-      message: 'Failed to process contact form'
+      message: 'Failed to process contact form',
+      details: err.message
     });
   }
 }
